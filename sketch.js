@@ -7,6 +7,8 @@ let gameState = "WAITING"; // 遊戲狀態：WAITING, PLAY, GAMEOVER
 let walls = []; // 儲存所有的牆壁物件
 let spawnTimer = 0; // 用於計時生成牆壁
 let player; // 玩家飛機物件
+let score = 0; // 分數
+let particles = []; // 儲存碎裂粒子
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -40,6 +42,8 @@ function resetGame() {
   walls = [];
   spawnTimer = 0;
   player = new Airplane();
+  score = 0;
+  particles = [];
 }
 
 function draw() {
@@ -101,6 +105,15 @@ function draw() {
   text("狀態: " + statusText, 20, 30);
   pop();
 
+  // 繪製分數 (左上角，需處理鏡像文字反轉)
+  push();
+  scale(-1, 1);
+  translate(-width, 0);
+  fill(0);
+  textSize(24);
+  text("Score: " + score, 20, 60);
+  pop();
+
   if (gameState === "WAITING") {
     // 等待偵測的畫面
     push();
@@ -124,9 +137,39 @@ function draw() {
       walls[i].update();
       walls[i].display();
 
+      // --- 碰撞與過關檢查 ---
+      // 當牆壁底部跨過飛機 Y 軸高度時進行判定
+      let wallBottom = walls[i].y + walls[i].h;
+      if (!walls[i].passed && wallBottom >= player.y - 10 && wallBottom <= player.y + walls[i].speed + 5) {
+        let leftWing = player.x - player.w / 2;
+        let rightWing = player.x + player.w / 2;
+        let holeL = walls[i].holeX;
+        let holeR = walls[i].holeX + walls[i].holeWidth;
+
+        // 檢查機翼是否完全在空洞範圍內
+        if (leftWing > holeL && rightWing < holeR) {
+          // 成功鑽過
+          score++;
+          walls[i].passed = true;
+          walls[i].shatter(); // 產生碎裂效果
+        } else {
+          // 撞牆判定
+          gameState = "GAMEOVER";
+        }
+      }
+
       // 3. 當牆壁掉出畫面底部時移除，釋放記憶體
-      if (walls[i].isOffScreen()) {
+      if (walls[i].isOffScreen() || (walls[i].passed && walls[i].particlesSpawned)) {
         walls.splice(i, 1);
+      }
+    }
+
+    // 4. 更新與繪製粒子
+    for (let i = particles.length - 1; i >= 0; i--) {
+      particles[i].update();
+      particles[i].display();
+      if (particles[i].finished()) {
+        particles.splice(i, 1);
       }
     }
 
@@ -142,6 +185,7 @@ function draw() {
     textSize(48);
     text("GAME OVER", width / 2, height / 2);
     textSize(20);
+    text("Final Score: " + score, width / 2, height / 2 + 100);
     text("Open Hand to Restart", width / 2, height / 2 + 50);
     pop();
   }
@@ -156,17 +200,18 @@ class Wall {
     this.holeWidth = 150; // 空洞的寬度
     // 隨機產生空洞的 X 座標位置，確保空洞完全在畫面內
     this.holeX = random(0, width - this.holeWidth);
-    this.passed = false; // 是否已安全通過
-    this.alpha = 255;    // 用於過關後的漸變消失
+    this.passed = false; // 是否已判定過
+    this.particlesSpawned = false; // 是否已產生粒子
   }
 
   update() {
     this.y += this.speed;
-    if (this.passed) this.alpha -= 20; // 過關後迅速淡出
   }
 
   display() {
-    fill(0, this.alpha); // 黑色實心牆壁 (支援透明度)
+    if (this.passed) return; // 如果過關了，本體就不再繪製
+
+    fill(0); // 黑色實心牆壁
     noStroke();
     
     // 繪製左側牆壁 (從 0 到 空洞開始)
@@ -177,11 +222,14 @@ class Wall {
     rect(this.holeX + this.holeWidth, this.y, width - (this.holeX + this.holeWidth), this.h);
   }
 
-  createShatterEffect() {
-    // 在牆壁位置產生一些灰色半透明粒子
-    for (let i = 0; i < 10; i++) {
-      particles.push(new Particle(this.holeX - 20, this.y, color(150, 150, 150, 150), 5));
-      particles.push(new Particle(this.holeX + this.holeWidth + 20, this.y, color(150, 150, 150, 150), 5));
+  shatter() {
+    this.particlesSpawned = true;
+    // 在牆壁左右兩側產生碎裂粒子
+    for (let i = 0; i < 15; i++) {
+      // 左側牆碎塊
+      particles.push(new Particle(random(0, this.holeX), this.y, 0));
+      // 右側牆碎塊
+      particles.push(new Particle(random(this.holeX + this.holeWidth, width), this.y, 0));
     }
   }
 
@@ -204,8 +252,6 @@ class Airplane {
   }
 
   display() {
-    if (gameState === "GAMEOVER") return; // 炸毀後不顯示
-
     push();
     translate(this.x, this.y);
     
@@ -221,29 +267,27 @@ class Airplane {
   }
 }
 
-// --- 粒子類別設計 ---
+// --- 碎裂粒子類別 ---
 class Particle {
-  constructor(x, y, col, size) {
+  constructor(x, y, col) {
     this.x = x;
     this.y = y;
-    this.vx = random(-4, 4);
-    this.vy = random(-4, 4);
+    this.vx = random(-2, 2);
+    this.vy = random(-2, 5);
     this.alpha = 255;
     this.color = col;
-    this.size = size;
   }
 
   update() {
     this.x += this.vx;
     this.y += this.vy;
-    this.alpha -= 10;
+    this.alpha -= 10; // 逐漸消失
   }
 
   display() {
     noStroke();
-    let c = color(red(this.color), green(this.color), blue(this.color), this.alpha);
-    fill(c);
-    ellipse(this.x, this.y, this.size);
+    fill(this.color, this.alpha);
+    ellipse(this.x, this.y, 8);
   }
 
   finished() {
