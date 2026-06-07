@@ -156,14 +156,17 @@ class Wall {
     this.holeWidth = 150; // 空洞的寬度
     // 隨機產生空洞的 X 座標位置，確保空洞完全在畫面內
     this.holeX = random(0, width - this.holeWidth);
+    this.passed = false; // 是否已安全通過
+    this.alpha = 255;    // 用於過關後的漸變消失
   }
 
   update() {
     this.y += this.speed;
+    if (this.passed) this.alpha -= 20; // 過關後迅速淡出
   }
 
   display() {
-    fill(0); // 黑色實心牆壁
+    fill(0, this.alpha); // 黑色實心牆壁 (支援透明度)
     noStroke();
     
     // 繪製左側牆壁 (從 0 到 空洞開始)
@@ -172,6 +175,14 @@ class Wall {
     
     // 繪製右側牆壁 (從 空洞結束 到 畫布寬度)
     rect(this.holeX + this.holeWidth, this.y, width - (this.holeX + this.holeWidth), this.h);
+  }
+
+  createShatterEffect() {
+    // 在牆壁位置產生一些灰色半透明粒子
+    for (let i = 0; i < 10; i++) {
+      particles.push(new Particle(this.holeX - 20, this.y, color(150, 150, 150, 150), 5));
+      particles.push(new Particle(this.holeX + this.holeWidth + 20, this.y, color(150, 150, 150, 150), 5));
+    }
   }
 
   isOffScreen() {
@@ -193,6 +204,8 @@ class Airplane {
   }
 
   display() {
+    if (gameState === "GAMEOVER") return; // 炸毀後不顯示
+
     push();
     translate(this.x, this.y);
     
@@ -205,5 +218,35 @@ class Airplane {
     fill(255, 0, 0); // 紅色機身
     triangle(-15, 20, 15, 20, 0, -20);
     pop();
+  }
+}
+
+// --- 粒子類別設計 ---
+class Particle {
+  constructor(x, y, col, size) {
+    this.x = x;
+    this.y = y;
+    this.vx = random(-4, 4);
+    this.vy = random(-4, 4);
+    this.alpha = 255;
+    this.color = col;
+    this.size = size;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.alpha -= 10;
+  }
+
+  display() {
+    noStroke();
+    let c = color(red(this.color), green(this.color), blue(this.color), this.alpha);
+    fill(c);
+    ellipse(this.x, this.y, this.size);
+  }
+
+  finished() {
+    return this.alpha <= 0;
   }
 }
