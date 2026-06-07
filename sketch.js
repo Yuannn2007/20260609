@@ -155,21 +155,13 @@ function draw() {
         } else {
           // 撞牆判定
           gameState = "GAMEOVER";
+          spawnExplosion(player.x, player.y); // 觸發爆炸特效
         }
       }
 
       // 3. 當牆壁掉出畫面底部時移除，釋放記憶體
       if (walls[i].isOffScreen() || (walls[i].passed && walls[i].particlesSpawned)) {
         walls.splice(i, 1);
-      }
-    }
-
-    // 4. 更新與繪製粒子
-    for (let i = particles.length - 1; i >= 0; i--) {
-      particles[i].update();
-      particles[i].display();
-      if (particles[i].finished()) {
-        particles.splice(i, 1);
       }
     }
 
@@ -189,6 +181,23 @@ function draw() {
     text("Open Hand to Restart", width / 2, height / 2 + 50);
     pop();
   }
+
+  // 4. 更新與繪製粒子 (移到主迴圈最下方，確保 GAMEOVER 時爆炸效果依然可見)
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update();
+    particles[i].display();
+    if (particles[i].finished()) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+// --- 輔助函數：爆炸特效 ---
+function spawnExplosion(x, y) {
+  for (let i = 0; i < 20; i++) {
+    // 產生 20 個黑色粒子，速度隨機向四周散開
+    particles.push(new Particle(x, y, 0, true)); 
+  }
 }
 
 // --- 巨牆類別設計 ---
@@ -196,7 +205,8 @@ class Wall {
   constructor() {
     this.y = -50; // 從畫面上方外開始掉落
     this.h = 40;  // 牆壁的厚度
-    this.speed = 4; // 固定的掉落速度
+    // 速度隨分數增加，起始 5，上限 15
+    this.speed = min(5 + score * 0.5, 15); 
     this.holeWidth = 150; // 空洞的寬度
     // 隨機產生空洞的 X 座標位置，確保空洞完全在畫面內
     this.holeX = random(0, width - this.holeWidth);
@@ -252,6 +262,8 @@ class Airplane {
   }
 
   display() {
+    if (gameState === "GAMEOVER") return; // 撞機後飛機消失
+
     push();
     translate(this.x, this.y);
     
@@ -269,11 +281,18 @@ class Airplane {
 
 // --- 碎裂粒子類別 ---
 class Particle {
-  constructor(x, y, col) {
+  constructor(x, y, col, isExplosion = false) {
     this.x = x;
     this.y = y;
-    this.vx = random(-2, 2);
-    this.vy = random(-2, 5);
+    if (isExplosion) {
+      // 爆炸粒子：向全方位隨機噴射
+      this.vx = random(-5, 5);
+      this.vy = random(-5, 5);
+    } else {
+      // 普通碎裂：主要是往下掉
+      this.vx = random(-2, 2);
+      this.vy = random(-2, 5);
+    }
     this.alpha = 255;
     this.color = col;
   }
