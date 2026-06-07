@@ -160,7 +160,7 @@ function draw() {
       }
 
       // 3. 當牆壁掉出畫面底部時移除，釋放記憶體
-      if (walls[i].isOffScreen() || (walls[i].passed && walls[i].particlesSpawned)) {
+      if (walls[i].isOffScreen()) {
         walls.splice(i, 1);
       }
     }
@@ -219,8 +219,6 @@ class Wall {
   }
 
   display() {
-    if (this.passed) return; // 如果過關了，本體就不再繪製
-
     fill(0); // 黑色實心牆壁
     noStroke();
     
